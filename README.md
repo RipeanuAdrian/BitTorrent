@@ -1,1 +1,17 @@
 # BitTorrent
+
+Client 0 is the tracker.
+The rest of the clients will open the input file specific to each one "in + rabk + .txt" which will contain the number of files, the number of segments
+for each file, their segments and the number of files and which files the client wants to download. All this information
+is transmitted to the tracker unless the current file already exists in the tracker's records, in which case it is only added to the swarm
+of the respective client. Each file has a swarm in which it is mentioned where a client can download the segments, but it is not known which
+segments each client has. All these data exchanges are carried out through MPI_SEND and MPI_RECV with the tag of the respective client (their
+rank).
+After the tracker is fully initialized with data from all clients, it will send "ACK" to the clients (they are waiting after the data transmission is finished) by which it communicates to them that they can start their work. To make sure that all processes start at the same time I use a barrier. I send data to the threads through their arguments to make sure that they are synchronized and any changes I make to them will be made to the others as well. The tracker will run until all clients have finished downloading their desired files and any message will be received to it to coordinate this download.
+Each download thread will go through the list of desired segments and make a new entry in the list of files owned by the respective client for each of them. The client will ask the tracker of the respective client's swarm and it will enter the swarm as a peer.
+The tracker will also give it the list of SEGMENT NAMES necessary to download the respective file. This will search the swarm for each segment.
+The client will randomly choose a client between the first and last element (including these) in the swarm for peer and seed. I have split the swarm into two seed and peer to keep better records. It checks if there is a peer in the swarm in which case it will be asked if it owns the respective segment. It will confirm or deny this fact. If it confirms the download is complete for the respective client.
+If it denies it will search in random mode in a seed.
+For 5 segments I will first search in the swarm of peers after if it is not found in these in seeds, and for the other 5 segments I will
+search directly in seeds. Both searches will be performed randomly. Thus, after an idea inspired after the forum I have streamlined the process
+so that the download / upload task is more equal. After 10 successfully received segments, a request will be sent to the tracker to resend the swarm because it is possible that it has changed and the process will be repeated until each segment of the file is downloaded. At this point, the tracker is called and will be notified that the client's file has finished downloading. The client is now the seed for the client (it is moved from peer to seed) and its segments will be written to an output file client_file. This process takes place until all the client's desired files are downloaded. At this point, the download thread closes, signaling the tracker that it has finished downloading the files, the client is just uploading now. When all clients have finished downloading the desired files, the tracker will be aware of this and will signal the upload threads with an "E" that the work is finished and to close.
